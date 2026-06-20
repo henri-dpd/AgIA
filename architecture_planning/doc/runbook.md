@@ -27,7 +27,7 @@ pip install --upgrade pip
 pip install -e .
 ```
 
-## Section 3 — usage and operation
+## Usage and operation
 
 ### Ingest business requirements
 
