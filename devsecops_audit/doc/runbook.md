@@ -48,5 +48,5 @@ La salida JSON incluye:
 cd devsecops_audit
 docker compose up -d ollama
 docker compose exec ollama ollama pull llama3.1
-docker compose run --rm devsecops-auditor /workspace/incident_response/app_multi_agent.py --show-history
+docker compose run --rm devsecops-auditor /workspace/devsecops_audit/devsecops_auditor.py --show-history
 ```
