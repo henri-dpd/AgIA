@@ -12,6 +12,7 @@ La implementación ejecutable solicitada está en `app_multi_agent.py`.
 
 - `app_multi_agent.py`: grafo multi-agente local con LangGraph `StateGraph`, `MemorySaver`, tipado estricto con `TypedDict` + Pydantic v2, integración con Ollama (`llama3.1`) y tool calling seguro.
 - `pyproject.toml`: metadatos mínimos del proyecto y dependencias exactas para Python 3.11+.
+- `Dockerfile`, `.dockerignore` y `docker-compose.yml`: empaquetado y orquestación local para ejecutar la aplicación en contenedores con Ollama.
 
 ### Capacidades implementadas
 
@@ -20,6 +21,7 @@ La implementación ejecutable solicitada está en `app_multi_agent.py`.
 - Resiliencia: `recursion_limit=10`, `try/except` en todos los nodos y ciclo de reintento controlado `action -> triage`.
 - Seguridad: sanitización estricta previa al grafo, validación de CVE/IP, herramientas de mínimo privilegio y bloqueo de ejecución arbitraria.
 - Operación local: flujo principal con Ollama y fallback determinista cuando Ollama no está disponible, lo que facilita pruebas y depuración sin romper la arquitectura objetivo.
+- Operación en contenedor: imagen Docker no-root y composición local con servicio Ollama dedicado.
 
 ---
 
@@ -27,7 +29,7 @@ La implementación ejecutable solicitada está en `app_multi_agent.py`.
 
 ### Arquitectura del Grafo
 
-El sistema usa un `StateGraph` con un estado compartido `AgentState` persistido mediante `MemorySaver` por `thread_id`.
+El sistema usa un `StateGraph` con un estado compartido `AgentState` persistido mediante `MemorySaver` por `thread_id`. La distribución operativa ahora contempla dos modos: ejecución local con Python y ejecución en contenedor mediante Docker/Docker Compose.
 
 #### Nodos
 
@@ -139,8 +141,9 @@ for message in state.values["messages"]:
 
 ### Requisitos del Sistema
 
-- Python 3.11+
-- Ollama instalado localmente
+- Python 3.11+ para ejecución local
+- Docker Engine 24+ y Docker Compose v2 para ejecución en contenedores
+- Ollama instalado localmente o un contenedor `ollama/ollama`
 - Modelo local `llama3.1`
 
 #### Levantar Ollama localmente
@@ -173,12 +176,21 @@ export LOG_LEVEL=INFO
 
 ### Guía de Instalación
 
+#### Instalación local con `venv`
+
 ```bash
 cd /home/runner/work/AgIA/AgIA
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
+```
+
+#### Construcción de la imagen Docker
+
+```bash
+cd /home/runner/work/AgIA/AgIA
+docker build -t agia-multi-agent:latest .
 ```
 
 ### Guía de Ejecución
@@ -197,6 +209,57 @@ python app_multi_agent.py \
   --thread-id incident-001 \
   --show-history
 ```
+#### Ejecución con Docker usando Ollama en el host
+
+1. Arranca Ollama en tu máquina host y descarga el modelo:
+
+```bash
+ollama serve
+ollama pull llama3.1
+```
+
+2. Ejecuta el contenedor de la aplicación contra el servicio Ollama del host:
+
+```bash
+docker run --rm \
+  --add-host=host.docker.internal:host-gateway \
+  -e OLLAMA_HOST=http://host.docker.internal:11434 \
+  -e OLLAMA_MODEL=llama3.1 \
+  agia-multi-agent:latest \
+  --input "Critical audit finding: CVE-2025-1337 detected on 10.20.30.40 after patch drift analysis." \
+  --thread-id docker-host-001 \
+  --show-history
+```
+
+#### Ejecución con Docker Compose (app + Ollama)
+
+1. Levanta el servicio de Ollama:
+
+```bash
+docker compose up -d ollama
+```
+
+2. Descarga el modelo dentro del contenedor de Ollama:
+
+```bash
+docker compose exec ollama ollama pull llama3.1
+```
+
+3. Ejecuta el agente dentro del contenedor de aplicación:
+
+```bash
+docker compose run --rm agia \
+  --input "Critical audit finding: CVE-2025-1337 detected on 10.20.30.40 after patch drift analysis." \
+  --thread-id compose-001 \
+  --show-history
+```
+
+4. Cuando termines, apaga los servicios y conserva el volumen del modelo para futuros arranques:
+
+```bash
+docker compose down
+```
+
 
 #### Payload esperado
 
@@ -206,6 +269,10 @@ Texto libre con evidencia operativa, idealmente incluyendo:
 - IP del activo afectado
 - Indicadores de severidad (`critical`, `high`, `medium`, `low`)
 - Contexto corto del incidente o auditoría
+
+#### Payloads esperados en Docker
+
+Los mismos payloads de texto libre aplican tanto en local como en contenedor. En Docker, pasa los argumentos después del nombre del servicio o de la imagen, por ejemplo `docker compose run --rm agia --input "..."` o `docker run ... agia-multi-agent:latest --input "..."`.
 
 #### Cómo interpretar los logs de salida
 
@@ -223,6 +290,10 @@ Texto libre con evidencia operativa, idealmente incluyendo:
 3. **Bloque `Checkpoint History`**
    - Permite seguir el orden real de transición entre nodos.
    - Si aparece un retorno a `triage`, el sistema agotó una ruta de ejecución y lanzó un retriage controlado.
+
+4. **Mensajes de conectividad con Ollama**
+   - Si aparece `Ollama triage unavailable` o `Ollama action execution unavailable`, el sistema no pudo alcanzar el endpoint configurado en `OLLAMA_HOST`.
+   - En ese caso, el flujo sigue siendo seguro porque entra en modo fallback determinista, pero no habrá decisión asistida por el LLM local.
 
 ### Ejemplos de prompts útiles
 
