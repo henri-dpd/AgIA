@@ -17,7 +17,8 @@ AgIA is a repository for multiple local multi-agent implementations. Each implem
 | `agents.md` | Workspace catalog of available multi-agent packs |
 | `skills/` | Shared development, documentation, and validation rules |
 | `scripts/` | Repository-level helper scripts, including pack validation |
-| `incident_response/` | Incident-response multi-agent pack |
+| `incident_response/` | Current incident-response multi-agent pack |
+| `function_development/` | Autonomous function-development multi-agent pack |
 | `devsecops/` | Full-cycle DevSecOps platform multi-agent pack |
 | `architecture_planning/` | Architecture planning multi-agent pack |
 | `project_lifecycle/` | Project lifecycle multi-agent pack |

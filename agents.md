@@ -7,6 +7,7 @@ This workspace is organised as a catalog of multi-agent packs. Shared guidance s
 | Pack | Purpose | Key files |
 |---|---|---|
 | `incident_response/` | Local incident-response orchestration with LangGraph, LangChain, and Ollama | `incident_response/README.md`, `incident_response/doc/agents.md`, `incident_response/app_multi_agent.py` |
+| `function_development/` | Local coding and self-correction orchestration for Python functions | `function_development/README.md`, `function_development/doc/agents.md`, `function_development/dev_agent_pipeline.py` |
 | `devsecops/` | Full-cycle DevSecOps platform: threat intel, architecture, IaC building, deployment, audit, and remediation — multi-agent team with Zero Trust | `devsecops/README.md`, `devsecops/doc/agents.md`, `devsecops/devsecops_platform.py` |
 | `architecture_planning/` | Conceptual architecture planning with architect-vs-QA debate and unified Markdown technical output | `architecture_planning/README.md`, `architecture_planning/doc/agents.md`, `architecture_planning/architecture_planner.py` |
 | `project_lifecycle/` | Full software project lifecycle management: new-project definition, in-progress evaluation, and completed-project audit | `project_lifecycle/README.md`, `project_lifecycle/doc/agents.md`, `project_lifecycle/app_project_lifecycle.py` |
@@ -41,6 +42,14 @@ The current implementation lives in `incident_response/`.
 - Runbook: [incident_response/doc/runbook.md](incident_response/doc/runbook.md)
 - Security controls: [incident_response/doc/security.md](incident_response/doc/security.md)
 
+## Function development pack
+
+The autonomous coding implementation lives in `function_development/`.
+
+- Agent contracts: [function_development/doc/agents.md](function_development/doc/agents.md)
+- Architecture: [function_development/doc/architecture.md](function_development/doc/architecture.md)
+- Runbook: [function_development/doc/runbook.md](function_development/doc/runbook.md)
+- Security controls: [function_development/doc/security.md](function_development/doc/security.md)
 ## DevSecOps platform pack
 
 The full-cycle DevSecOps multi-agent implementation lives in `devsecops/`.
