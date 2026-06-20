@@ -7,6 +7,7 @@ This workspace is organised as a catalog of multi-agent packs. Shared guidance s
 | Pack | Purpose | Key files |
 |---|---|---|
 | `incident_response/` | Local incident-response orchestration with LangGraph, LangChain, and Ollama | `incident_response/README.md`, `incident_response/doc/agents.md`, `incident_response/app_multi_agent.py` |
+| `function_development/` | Local coding and self-correction orchestration for Python functions | `function_development/README.md`, `function_development/doc/agents.md`, `function_development/dev_agent_pipeline.py` |
 
 ## Workspace conventions
 
@@ -37,6 +38,15 @@ The current implementation lives in `incident_response/`.
 - Architecture: [incident_response/doc/architecture.md](incident_response/doc/architecture.md)
 - Runbook: [incident_response/doc/runbook.md](incident_response/doc/runbook.md)
 - Security controls: [incident_response/doc/security.md](incident_response/doc/security.md)
+
+## Function development pack
+
+The autonomous coding implementation lives in `function_development/`.
+
+- Agent contracts: [function_development/doc/agents.md](function_development/doc/agents.md)
+- Architecture: [function_development/doc/architecture.md](function_development/doc/architecture.md)
+- Runbook: [function_development/doc/runbook.md](function_development/doc/runbook.md)
+- Security controls: [function_development/doc/security.md](function_development/doc/security.md)
 
 When a new multi-agent pack is added, register it here and keep its pack-specific contracts inside that folder.
 
