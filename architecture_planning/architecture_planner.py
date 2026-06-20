@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Annotated, Any, TypedDict
 
+import httpx
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import MemorySaver
@@ -117,7 +118,7 @@ def architect_node(state: DebateState, container: PlannerContainer) -> dict[str,
         proposal = str(response.content).strip()
         if not proposal:
             raise ValueError("Empty architect proposal")
-    except Exception as exc:  # pragma: no cover - fallback path
+    except (ConnectionError, TimeoutError, OSError, RuntimeError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
         proposal = _deterministic_architect_proposal(requirement, prior_review, round_number)
         return {
             "architect_proposal": proposal,
@@ -192,7 +193,7 @@ def qa_node(state: DebateState, container: PlannerContainer) -> dict[str, Any]:
     except (ValidationError, json.JSONDecodeError, ValueError) as exc:  # pragma: no cover - fallback path
         audit = _fallback_audit(proposal, round_number)
         error = f"QA parsing fallback used: {exc}"
-    except Exception as exc:  # pragma: no cover - fallback path
+    except (ConnectionError, TimeoutError, OSError, RuntimeError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
         audit = _fallback_audit(proposal, round_number)
         error = f"QA LLM unavailable: {exc}"
     else:
