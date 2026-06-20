@@ -1,0 +1,29 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  project_lifecycle:
+    build:
+      context: .
+    image: agia-project-lifecycle:latest
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.1
+    depends_on:
+      ollama:
+        condition: service_started
+    command: ["--show-history"]
+    restart: "no"
+
+volumes:
+  ollama-data:
