@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dev_agent_pipeline import (
+    FunctionRequest,
     GeneratedArtifact,
     PipelineServices,
     PytestExecutionTool,
@@ -57,7 +58,7 @@ def test_pytest_execution_tool_returns_traceback_feedback() -> None:
 
 @dataclass(frozen=True)
 class StubCoder:
-    def generate(self, request, attempt: int, feedback: str | None):
+    def generate(self, request: FunctionRequest, attempt: int, feedback: str | None):
         if attempt == 1:
             return GeneratedArtifact(
                 function_name=request.function_name,

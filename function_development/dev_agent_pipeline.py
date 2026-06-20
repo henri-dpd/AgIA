@@ -347,7 +347,8 @@ def coder_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
         else None
     )
     next_attempt = state["attempt"] + 1
-    artifact = services.coder.generate(request=request, attempt=next_attempt, feedback=format_feedback(previous_report) if previous_report else None)
+    feedback = format_feedback(previous_report) if previous_report else None
+    artifact = services.coder.generate(request=request, attempt=next_attempt, feedback=feedback)
     return {
         "attempt": next_attempt,
         "artifact": artifact.model_dump(),
