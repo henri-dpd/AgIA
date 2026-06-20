@@ -8,6 +8,7 @@ This workspace is organised as a catalog of multi-agent packs. Shared guidance s
 |---|---|---|
 | `incident_response/` | Local incident-response orchestration with LangGraph, LangChain, and Ollama | `incident_response/README.md`, `incident_response/doc/agents.md`, `incident_response/app_multi_agent.py` |
 | `function_development/` | Local coding and self-correction orchestration for Python functions | `function_development/README.md`, `function_development/doc/agents.md`, `function_development/dev_agent_pipeline.py` |
+| `devsecops/` | Full-cycle DevSecOps platform: threat intel, architecture, IaC building, deployment, audit, and remediation — multi-agent team with Zero Trust | `devsecops/README.md`, `devsecops/doc/agents.md`, `devsecops/devsecops_platform.py` |
 
 ## Workspace conventions
 
@@ -47,6 +48,14 @@ The autonomous coding implementation lives in `function_development/`.
 - Architecture: [function_development/doc/architecture.md](function_development/doc/architecture.md)
 - Runbook: [function_development/doc/runbook.md](function_development/doc/runbook.md)
 - Security controls: [function_development/doc/security.md](function_development/doc/security.md)
+## DevSecOps platform pack
+
+The full-cycle DevSecOps multi-agent implementation lives in `devsecops/`.
+
+- Agent contracts: [devsecops/doc/agents.md](devsecops/doc/agents.md)
+- Architecture: [devsecops/doc/architecture.md](devsecops/doc/architecture.md)
+- Runbook: [devsecops/doc/runbook.md](devsecops/doc/runbook.md)
+- Security controls: [devsecops/doc/security.md](devsecops/doc/security.md)
 
 When a new multi-agent pack is added, register it here and keep its pack-specific contracts inside that folder.
 
