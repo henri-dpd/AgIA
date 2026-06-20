@@ -52,6 +52,11 @@ def _build_llm() -> ChatOllama:
     return ChatOllama(model=DEFAULT_MODEL, base_url=DEFAULT_BASE_URL, temperature=0.2)
 
 
+def _format_fallback_error(agent: str, category: str, exc: Exception) -> str:
+    detail = str(exc).strip() or "no detail available"
+    return f"{agent} fallback ({category}:{type(exc).__name__}): {detail}"
+
+
 def _parse_audit(raw_content: str) -> QAAudit:
     payload = json.loads(raw_content)
     return QAAudit.model_validate(payload)
@@ -123,7 +128,7 @@ def architect_node(state: DebateState, container: PlannerContainer) -> dict[str,
         return {
             "architect_proposal": proposal,
             "messages": [AIMessage(content=proposal, name="infra_architect")],
-            "errors": [*state["errors"], f"Architect LLM unavailable: {exc}"][-8:],
+            "errors": [*state["errors"], _format_fallback_error("Architect", "llm", exc)][-8:],
         }
 
     return {
@@ -192,10 +197,10 @@ def qa_node(state: DebateState, container: PlannerContainer) -> dict[str, Any]:
         audit = _parse_audit(str(response.content))
     except (ValidationError, json.JSONDecodeError, ValueError) as exc:  # pragma: no cover - fallback path
         audit = _fallback_audit(proposal, round_number)
-        error = f"QA parsing fallback used: {exc}"
+        error = _format_fallback_error("QA", "parse", exc)
     except (ConnectionError, TimeoutError, OSError, RuntimeError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
         audit = _fallback_audit(proposal, round_number)
-        error = f"QA LLM unavailable: {exc}"
+        error = _format_fallback_error("QA", "llm", exc)
     else:
         error = ""
 
