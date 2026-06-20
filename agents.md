@@ -7,6 +7,7 @@ This workspace is organised as a catalog of multi-agent packs. Shared guidance s
 | Pack | Purpose | Key files |
 |---|---|---|
 | `incident_response/` | Local incident-response orchestration with LangGraph, LangChain, and Ollama | `incident_response/README.md`, `incident_response/doc/agents.md`, `incident_response/app_multi_agent.py` |
+| `devsecops_audit/` | Auditoría local SAST/IaC con modelo multi-agente y propuestas de mitigación Zero Trust | `devsecops_audit/README.md`, `devsecops_audit/doc/agents.md`, `devsecops_audit/devsecops_auditor.py` |
 
 ## Workspace conventions
 
@@ -37,6 +38,15 @@ The current implementation lives in `incident_response/`.
 - Architecture: [incident_response/doc/architecture.md](incident_response/doc/architecture.md)
 - Runbook: [incident_response/doc/runbook.md](incident_response/doc/runbook.md)
 - Security controls: [incident_response/doc/security.md](incident_response/doc/security.md)
+
+## DevSecOps audit pack
+
+The SAST/IaC implementation lives in `devsecops_audit/`.
+
+- Agent contracts: [devsecops_audit/doc/agents.md](devsecops_audit/doc/agents.md)
+- Architecture: [devsecops_audit/doc/architecture.md](devsecops_audit/doc/architecture.md)
+- Runbook: [devsecops_audit/doc/runbook.md](devsecops_audit/doc/runbook.md)
+- Security controls: [devsecops_audit/doc/security.md](devsecops_audit/doc/security.md)
 
 When a new multi-agent pack is added, register it here and keep its pack-specific contracts inside that folder.
 
