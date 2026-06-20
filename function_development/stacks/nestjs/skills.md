@@ -47,6 +47,8 @@ bootstrap();
 ## Exception filter skeleton
 
 ```typescript
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException } from "@nestjs/common";
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
