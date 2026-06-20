@@ -281,10 +281,14 @@ def generate_iac_proposals(arch_plan: list[dict[str, Any]]) -> str:
             "file_name": "security_baseline.rego",
             "content": (
                 "package kubernetes.admission\n\n"
+                "# runAsUser == 0 means UID 0 (root); block containers that explicitly run as root.\n"
                 "deny[msg] {\n"
                 "  input.request.object.spec.containers[_].securityContext.runAsUser == 0\n"
                 '  msg := "Containers must not run as root (runAsUser=0)"\n'
                 "}\n\n"
+                "# runAsNonRoot=true enforces that the container image does not run as UID 0.\n"
+                "# Note: this checks pod-level securityContext; for full coverage extend to\n"
+                "# containers[_].securityContext.runAsNonRoot as well.\n"
                 "deny[msg] {\n"
                 "  not input.request.object.spec.securityContext.runAsNonRoot\n"
                 '  msg := "Pods must enforce runAsNonRoot=true"\n'
@@ -401,14 +405,16 @@ def _scan_file(fp: Path, source: str, out: list[dict[str, Any]]) -> None:
         stripped = line.strip()
 
         if is_py:
-            if re.search(r"(?i)(password|token|secret)_?key\b\s*=\s*['\"]", line):
+            # Require at least 4 chars after the quote to reduce false positives on empty/short constants
+            if re.search(r"(?i)(password|token|secret)(_?key)?\s*=\s*['\"][^'\"]{4,}", line):
                 out.append(_finding(fp, ln, "HARDCODED-SECRET", "high",
                     "A02:2021-Cryptographic Failures", stripped[:120],
                     "Hardcoded credential in source code."))
-            if re.search(r"execute\s*\(\s*f['\"]", line):
+            # Cover f-string, %-format, and .format() string injection patterns
+            if re.search(r"execute\s*\(\s*(?:f['\"]|['\"][^'\"]*%(?:s|d)[^'\"]*['\"]|['\"][^'\"]*\.format)", line):
                 out.append(_finding(fp, ln, "SQLI-FSTRING", "critical",
                     "A03:2021-Injection", stripped[:120],
-                    "SQL injection via f-string query composition."))
+                    "SQL injection via dynamic string composition in query."))
             if re.search(r"subprocess\..*shell\s*=\s*True", line):
                 out.append(_finding(fp, ln, "SUBPROCESS-SHELL", "high",
                     "A03:2021-Injection", stripped[:120],
@@ -418,21 +424,22 @@ def _scan_file(fp: Path, source: str, out: list[dict[str, Any]]) -> None:
             low = stripped.lower()
             if low.startswith("user "):
                 has_user = True
-                if low == "user root":
+                # Catch "user root", "user 0", "user root:root", "user 0:0" (all run as UID 0)
+                if re.match(r"user\s+(root|0)(:(root|0))?\s*$", low):
                     out.append(_finding(fp, ln, "RUN-AS-ROOT", "high",
                         "A05:2021-Security Misconfiguration", stripped,
-                        "Container explicitly runs as root."))
+                        "Container explicitly runs as root (root or UID 0)."))
             if low.startswith("from ") and ":latest" in low:
                 out.append(_finding(fp, ln, "LATEST-TAG", "medium",
                     "A06:2021-Vulnerable and Outdated Components", stripped[:120],
                     "Base image uses floating :latest tag."))
 
         if is_tf:
-            if "0.0.0.0/0" in line:
+            if "0.0.0.0/0" in line and not stripped.startswith("#"):
                 out.append(_finding(fp, ln, "OPEN-CIDR", "critical",
                     "A05:2021-Security Misconfiguration", stripped[:120],
                     "Unrestricted CIDR 0.0.0.0/0 exposes resource to the internet."))
-            if "publicly_accessible = true" in line.lower():
+            if "publicly_accessible = true" in line.lower() and not stripped.startswith("#"):
                 out.append(_finding(fp, ln, "PUBLIC-RESOURCE", "high",
                     "A01:2021-Broken Access Control", stripped[:120],
                     "Resource is explicitly publicly accessible."))
