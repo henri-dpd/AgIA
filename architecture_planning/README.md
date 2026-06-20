@@ -7,7 +7,7 @@ All commands in this file assume your working directory is `architecture_plannin
 ## Quick start
 
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ollama serve && ollama pull llama3.1
 python architecture_planner.py --show-history
