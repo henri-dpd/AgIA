@@ -254,9 +254,9 @@ project/
 {scaffold_section}"""
 
 
-def _fallback_evaluation(description: str) -> ProjectEvaluation:  # noqa: ARG001
+def _fallback_evaluation(description: str) -> ProjectEvaluation:
     return ProjectEvaluation(
-        overall_status="Project is progressing but requires attention in several areas.",
+        overall_status=f"Project in progress. Review triggered for: {description[:120]}",
         requirements_coverage=(
             "Partial coverage of documented requirements. "
             "Core functionality appears to be in progress, but non-functional requirements need review."
@@ -285,7 +285,7 @@ def _fallback_evaluation(description: str) -> ProjectEvaluation:  # noqa: ARG001
     )
 
 
-def _fallback_audit(description: str) -> CompletionAudit:  # noqa: ARG001
+def _fallback_audit(description: str) -> CompletionAudit:
     return CompletionAudit(
         objectives_met=["Core functionality delivered.", "System is deployable."],
         objectives_not_met=["Performance targets not verified.", "Accessibility compliance not addressed."],
@@ -302,7 +302,8 @@ def _fallback_audit(description: str) -> CompletionAudit:  # noqa: ARG001
             "Implement missing audit logging and rate-limiting features.",
         ],
         final_verdict=(
-            "The project delivers its primary objective but is not production-ready. "
+            f"Audit of '{description[:80]}': "
+            "the project delivers its primary objective but is not production-ready. "
             "Significant gaps in testing, documentation, and non-functional requirements "
             "must be addressed before a general availability release."
         ),
