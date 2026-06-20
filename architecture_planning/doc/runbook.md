@@ -15,7 +15,7 @@ Run commands from the `architecture_planning/` directory.
 
 | Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama endpoint |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama endpoint |
 | `OLLAMA_MODEL` | `llama3.1` | Model for both agents |
 
 ## Local installation

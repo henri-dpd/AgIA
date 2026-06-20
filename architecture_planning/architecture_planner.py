@@ -15,7 +15,7 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
-DEFAULT_BASE_URL = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+DEFAULT_BASE_URL = os.getenv("OLLAMA_BASE_URL", os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434"))
 MAX_REVIEW_ROUNDS = 3
 
 
@@ -123,7 +123,7 @@ def architect_node(state: DebateState, container: PlannerContainer) -> dict[str,
         proposal = str(response.content).strip()
         if not proposal:
             raise ValueError("Empty architect proposal")
-    except (ConnectionError, TimeoutError, OSError, RuntimeError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
+    except (ConnectionError, TimeoutError, OSError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
         proposal = _deterministic_architect_proposal(requirement, prior_review, round_number)
         return {
             "architect_proposal": proposal,
@@ -198,7 +198,7 @@ def qa_node(state: DebateState, container: PlannerContainer) -> dict[str, Any]:
     except (ValidationError, json.JSONDecodeError, ValueError) as exc:  # pragma: no cover - fallback path
         audit = _fallback_audit(proposal, round_number)
         error = _format_fallback_error("QA", "parse", exc)
-    except (ConnectionError, TimeoutError, OSError, RuntimeError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
+    except (ConnectionError, TimeoutError, OSError, httpx.HTTPError) as exc:  # pragma: no cover - fallback path
         audit = _fallback_audit(proposal, round_number)
         error = _format_fallback_error("QA", "llm", exc)
     else:
