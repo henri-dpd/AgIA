@@ -112,7 +112,7 @@ El sistema detecta que Ollama no está disponible y opera en modo determinista a
     python ./devsecops/devsecops_platform.py . --show-report > devsecops-report.json
     
 - name: Upload report
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v3
   with:
     name: devsecops-report
     path: devsecops-report.json

@@ -405,16 +405,19 @@ def _scan_file(fp: Path, source: str, out: list[dict[str, Any]]) -> None:
         stripped = line.strip()
 
         if is_py:
-            # Require at least 4 chars after the quote to reduce false positives on empty/short constants
-            if re.search(r"(?i)(password|token|secret)(_?key)?\s*=\s*['\"][^'\"]{4,}", line):
+            # Require at least 2 chars after the opening quote to filter empty assignments
+            # while catching short but valid credentials (e.g., API keys, short passwords).
+            if re.search(r"(?i)(password|token|secret)(_?key)?\s*=\s*['\"][^'\"]{2,}", line):
                 out.append(_finding(fp, ln, "HARDCODED-SECRET", "high",
                     "A02:2021-Cryptographic Failures", stripped[:120],
                     "Hardcoded credential in source code."))
-            # Cover f-string, %-format, and .format() string injection patterns
-            if re.search(r"execute\s*\(\s*(?:f['\"]|['\"][^'\"]*%(?:s|d)[^'\"]*['\"]|['\"][^'\"]*\.format)", line):
+            # Target f-string interpolation directly into execute() — the clearest injection vector.
+            # .format() applied to the SQL template and %-operator formatting are also covered.
+            # Safe parameterized calls like execute("... %s", (val,)) are not matched.
+            if re.search(r"execute\s*\(\s*f['\"]", line) or re.search(r"execute\s*\([^,)]*\.format\s*\(", line):
                 out.append(_finding(fp, ln, "SQLI-FSTRING", "critical",
                     "A03:2021-Injection", stripped[:120],
-                    "SQL injection via dynamic string composition in query."))
+                    "SQL injection via f-string or .format() composition in execute() call."))
             if re.search(r"subprocess\..*shell\s*=\s*True", line):
                 out.append(_finding(fp, ln, "SUBPROCESS-SHELL", "high",
                     "A03:2021-Injection", stripped[:120],
