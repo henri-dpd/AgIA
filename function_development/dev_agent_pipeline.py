@@ -369,6 +369,30 @@ class PassthroughAuditor:
         )
 
 
+# ---------------------------------------------------------------------------
+# Fallback artifact factories
+# ---------------------------------------------------------------------------
+
+def _fallback_generated_artifact() -> GeneratedArtifact:
+    """Minimal GeneratedArtifact used when LLM output cannot be parsed."""
+    return GeneratedArtifact(
+        function_name="unknown",
+        function_code="pass  # fallback",
+        test_code="pass  # fallback",
+    )
+
+
+def _fallback_plan_artifact() -> PlanArtifact:
+    """Minimal PlanArtifact used when LLM output cannot be parsed."""
+    return PlanArtifact(
+        title="fallback",
+        context_summary="fallback",
+        specifications="pass  # fallback",
+        acceptance_criteria=["pass"],
+        documentation="fallback",
+    )
+
+
 class OllamaPlanner(PlannerPort):
     def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL) -> None:
         self._model = model
@@ -527,9 +551,7 @@ class OllamaContractValidator(ContractValidatorPort):
                 return ContractReport.model_validate(data)
             except (ValidationError, Exception):
                 pass
-        return PassthroughContractValidator().validate_contract(plan, GeneratedArtifact(
-            function_name="unknown", function_code="pass  # fallback", test_code="pass  # fallback"
-        ))
+        return PassthroughContractValidator().validate_contract(plan, _fallback_generated_artifact())
 
     def _invoke(self, prompt: str) -> str:
         llm = ChatOllama(model=self._model, base_url=self._base_url, temperature=0)
@@ -589,14 +611,8 @@ class OllamaAuditor(AuditorPort):
             except (ValidationError, Exception):
                 pass
         return PassthroughAuditor().audit(
-            PlanArtifact(
-                title="fallback",
-                context_summary="fallback",
-                specifications="pass  # fallback",
-                acceptance_criteria=["pass"],
-                documentation="fallback",
-            ),
-            GeneratedArtifact(function_name="unknown", function_code="pass  # fallback", test_code="pass  # fallback"),
+            _fallback_plan_artifact(),
+            _fallback_generated_artifact(),
             contract,
             0,
         )
