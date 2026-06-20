@@ -1,16 +1,16 @@
-# Testing Rules
+# Exploration and validation rules
 
-These rules apply to all tests in this repository, whether written by humans or AI agents.
+These rules define how contributors validate multi-agent packs in this repository. Automated tests are welcome, but exploratory validation is the default when a pack does not yet provide a test suite.
 
 ## General rules
 
-- Every public function, class method, and agent node must have at least one unit test.
-- Tests must be runnable without an active Ollama instance; use the deterministic fallback mode.
-- Test files live next to the code they test or under a `tests/` directory at the project root.
-- Test names must describe the scenario: `test_<unit>_<condition>_<expected_outcome>`.
+- Start with a reproducible exploration scenario before adding or changing code.
+- Prefer validation paths that run without an active Ollama instance; use the deterministic fallback mode when possible.
+- If automated tests exist, keep them close to the code they validate or under the pack `tests/` directory.
+- When adding tests, use scenario-driven names such as `test_<unit>_<condition>_<expected_outcome>`.
 - No `time.sleep` in tests unless testing actual timing behaviour; use mocks instead.
 
-## What to test
+## What to explore or test
 
 | Layer | What |
 |---|---|
@@ -19,6 +19,8 @@ These rules apply to all tests in this repository, whether written by humans or 
 | Agent nodes | Happy path, error accumulation, routing decisions, fallback mode |
 | Tool registry | Known tools resolve, unknown names are rejected |
 | Graph routing | All routing conditions produce the correct next node |
+
+For the incident response pack, a valid exploratory run should cover at least one input that routes to `action` and one that terminates in `triage`.
 
 ## Test structure
 
@@ -48,16 +50,23 @@ with patch("app_multi_agent.ChatOllama") as mock_llm:
     ...
 ```
 
-## Coverage expectations
+## Validation expectations
 
-- New code merged to `main` must not reduce overall coverage.
-- Every documented behaviour in `doc/` must be traceable to at least one test.
-- Security constraints documented in `doc/security.md` must each have an explicit negative test (i.e., test that the constraint rejects invalid input).
+- Every documented behaviour in a pack `doc/` directory must be covered by either an automated test or a reproducible exploration scenario.
+- Security constraints documented in a pack `doc/security.md` must be exercised by at least one negative validation path.
+- When a pack gains automated tests, new code must not reduce the existing coverage baseline for that pack.
 
-## Running tests
+## Running validation
 
 ```bash
-python -m pytest              # all tests
-python -m pytest -v           # verbose output
-python -m pytest --tb=short   # short tracebacks
+# Exploratory CLI run
+python app_multi_agent.py --show-history
+
+# Targeted CLI run with explicit input
+python app_multi_agent.py --input "CVE-2025-1337 on 10.20.30.40" --thread-id validation-001 --show-history
+
+# Optional automated tests
+python -m pytest
+python -m pytest -v
+python -m pytest --tb=short
 ```

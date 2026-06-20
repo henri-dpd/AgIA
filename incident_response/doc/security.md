@@ -32,7 +32,7 @@ All user input is normalised **before** entering the graph. Nodes never consume 
 3. Restrict the tool to a single operational responsibility.
 4. Register the tool in `ToolRegistry`.
 5. Never expose shell, `subprocess`, arbitrary file paths, or unguarded network calls.
-6. Document the new tool in `doc/agents.md`.
+6. Document the new tool in `doc/agents.md` for the target pack.
 
 ## Action agent constraints
 

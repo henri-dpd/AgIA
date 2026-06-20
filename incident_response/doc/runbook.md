@@ -1,5 +1,7 @@
 # Runbook
 
+Run all commands from the `incident_response/` directory unless noted otherwise.
+
 ## Requirements
 
 | Dependency | Version |

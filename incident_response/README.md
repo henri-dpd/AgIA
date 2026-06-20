@@ -2,6 +2,8 @@
 
 AI agents for local multi-agent orchestration with LangGraph, LangChain, and Ollama.
 
+All commands in this file assume your working directory is `incident_response/`.
+
 ## Quick start
 
 ```bash
@@ -24,7 +26,7 @@ docker compose run --rm agia --show-history
 | Document | Description |
 |---|---|
 | [doc/architecture.md](doc/architecture.md) | Graph topology, state schema, node contracts |
-| [agents.md](agents.md) | Triage and Action agent specifications |
+| [doc/agents.md](doc/agents.md) | Triage and Action agent specifications |
 | [doc/runbook.md](doc/runbook.md) | Installation, execution, Docker, log interpretation |
 | [doc/security.md](doc/security.md) | Input sanitisation, tool registry, security controls |
 
@@ -32,6 +34,7 @@ docker compose run --rm agia --show-history
 
 | Document | Description |
 |---|---|
-| [skills/workflow.md](skills/workflow.md) | AI-assisted development flow: doc → test → implement → validate |
-| [skills/testing.md](skills/testing.md) | Testing rules and patterns |
-| [skills/documentation.md](skills/documentation.md) | Documentation standards |
+| [../agents.md](../agents.md) | Workspace pack catalog |
+| [../skills/workflow.md](../skills/workflow.md) | AI-assisted development flow: explore → document → implement → validate |
+| [../skills/testing.md](../skills/testing.md) | Exploration and validation rules |
+| [../skills/documentation.md](../skills/documentation.md) | Documentation standards |
