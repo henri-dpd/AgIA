@@ -96,7 +96,8 @@ docker compose run --rm devsecops /workspace/incident_response --show-report
 El sistema funciona completamente sin Ollama gracias al fallback determinista. Cada agente ejecuta sus herramientas directamente y produce output estructurado válido. Para uso en CI/CD offline:
 
 ```bash
-OLLAMA_HOST=http://localhost:1 python devsecops_platform.py /ruta --show-report
+# Port 0 is unassignable; this forces Ollama connection to fail and activates deterministic fallback mode.
+OLLAMA_HOST=http://127.0.0.1:0 python devsecops_platform.py /ruta --show-report
 ```
 
 El sistema detecta que Ollama no está disponible y opera en modo determinista automáticamente.
