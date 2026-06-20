@@ -17,7 +17,8 @@ AgIA is a repository for multiple local multi-agent implementations. Each implem
 | `agents.md` | Workspace catalog of available multi-agent packs |
 | `skills/` | Shared development, documentation, and validation rules |
 | `scripts/` | Repository-level helper scripts, including pack validation |
-| `incident_response/` | Current incident-response multi-agent pack |
+| `incident_response/` | Incident-response multi-agent pack |
+| `architecture_planning/` | Architecture planning multi-agent pack |
 
 ## Current packs
 
@@ -50,6 +51,15 @@ cd incident_response
 python app_multi_agent.py --show-history
 docker compose up -d ollama
 docker compose run --rm agia --show-history
+```
+
+Work on the architecture-planning pack:
+
+```bash
+cd architecture_planning
+python architecture_planner.py --show-history
+docker compose up -d ollama
+docker compose run --rm architecture_planner --show-history
 ```
 
 ## Adding a new pack

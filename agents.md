@@ -7,6 +7,7 @@ This workspace is organised as a catalog of multi-agent packs. Shared guidance s
 | Pack | Purpose | Key files |
 |---|---|---|
 | `incident_response/` | Local incident-response orchestration with LangGraph, LangChain, and Ollama | `incident_response/README.md`, `incident_response/doc/agents.md`, `incident_response/app_multi_agent.py` |
+| `architecture_planning/` | Conceptual architecture planning with architect-vs-QA debate and unified Markdown technical output | `architecture_planning/README.md`, `architecture_planning/doc/agents.md`, `architecture_planning/architecture_planner.py` |
 
 ## Workspace conventions
 
@@ -37,6 +38,15 @@ The current implementation lives in `incident_response/`.
 - Architecture: [incident_response/doc/architecture.md](incident_response/doc/architecture.md)
 - Runbook: [incident_response/doc/runbook.md](incident_response/doc/runbook.md)
 - Security controls: [incident_response/doc/security.md](incident_response/doc/security.md)
+
+## Architecture planning pack
+
+The architecture planning implementation lives in `architecture_planning/`.
+
+- Agent contracts: [architecture_planning/doc/agents.md](architecture_planning/doc/agents.md)
+- Architecture: [architecture_planning/doc/architecture.md](architecture_planning/doc/architecture.md)
+- Runbook: [architecture_planning/doc/runbook.md](architecture_planning/doc/runbook.md)
+- Security controls: [architecture_planning/doc/security.md](architecture_planning/doc/security.md)
 
 When a new multi-agent pack is added, register it here and keep its pack-specific contracts inside that folder.
 
