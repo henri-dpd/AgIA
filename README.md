@@ -17,8 +17,10 @@ AgIA is a repository for multiple local multi-agent implementations. Each implem
 | `agents.md` | Workspace catalog of available multi-agent packs |
 | `skills/` | Shared development, documentation, and validation rules |
 | `scripts/` | Repository-level helper scripts, including pack validation |
-| `incident_response/` | Current incident-response multi-agent pack |
+| `incident_response/` | Incident-response multi-agent pack |
 | `devsecops/` | Full-cycle DevSecOps platform multi-agent pack |
+| `architecture_planning/` | Architecture planning multi-agent pack |
+| `project_lifecycle/` | Project lifecycle multi-agent pack |
 
 ## Current packs
 
@@ -60,6 +62,24 @@ cd devsecops
 python devsecops_platform.py . --show-report
 docker compose up -d ollama
 docker compose run --rm devsecops /workspace --show-report
+```
+
+Work on the architecture-planning pack:
+
+```bash
+cd architecture_planning
+python architecture_planner.py --show-history
+docker compose up -d ollama
+docker compose run --rm architecture_planner --show-history
+```
+
+Work on the project-lifecycle pack:
+
+```bash
+cd project_lifecycle
+python app_project_lifecycle.py --mode define --scaffold --show-history
+docker compose up -d ollama
+docker compose run --rm project_lifecycle --show-history
 ```
 
 ## Adding a new pack

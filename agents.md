@@ -8,6 +8,8 @@ This workspace is organised as a catalog of multi-agent packs. Shared guidance s
 |---|---|---|
 | `incident_response/` | Local incident-response orchestration with LangGraph, LangChain, and Ollama | `incident_response/README.md`, `incident_response/doc/agents.md`, `incident_response/app_multi_agent.py` |
 | `devsecops/` | Full-cycle DevSecOps platform: threat intel, architecture, IaC building, deployment, audit, and remediation — multi-agent team with Zero Trust | `devsecops/README.md`, `devsecops/doc/agents.md`, `devsecops/devsecops_platform.py` |
+| `architecture_planning/` | Conceptual architecture planning with architect-vs-QA debate and unified Markdown technical output | `architecture_planning/README.md`, `architecture_planning/doc/agents.md`, `architecture_planning/architecture_planner.py` |
+| `project_lifecycle/` | Full software project lifecycle management: new-project definition, in-progress evaluation, and completed-project audit | `project_lifecycle/README.md`, `project_lifecycle/doc/agents.md`, `project_lifecycle/app_project_lifecycle.py` |
 
 ## Workspace conventions
 
@@ -47,6 +49,24 @@ The full-cycle DevSecOps multi-agent implementation lives in `devsecops/`.
 - Architecture: [devsecops/doc/architecture.md](devsecops/doc/architecture.md)
 - Runbook: [devsecops/doc/runbook.md](devsecops/doc/runbook.md)
 - Security controls: [devsecops/doc/security.md](devsecops/doc/security.md)
+
+## Architecture planning pack
+
+The architecture planning implementation lives in `architecture_planning/`.
+
+- Agent contracts: [architecture_planning/doc/agents.md](architecture_planning/doc/agents.md)
+- Architecture: [architecture_planning/doc/architecture.md](architecture_planning/doc/architecture.md)
+- Runbook: [architecture_planning/doc/runbook.md](architecture_planning/doc/runbook.md)
+- Security controls: [architecture_planning/doc/security.md](architecture_planning/doc/security.md)
+
+## Project lifecycle pack
+
+The project lifecycle implementation lives in `project_lifecycle/`.
+
+- Agent contracts: [project_lifecycle/doc/agents.md](project_lifecycle/doc/agents.md)
+- Architecture: [project_lifecycle/doc/architecture.md](project_lifecycle/doc/architecture.md)
+- Runbook: [project_lifecycle/doc/runbook.md](project_lifecycle/doc/runbook.md)
+- Security controls: [project_lifecycle/doc/security.md](project_lifecycle/doc/security.md)
 
 When a new multi-agent pack is added, register it here and keep its pack-specific contracts inside that folder.
 
