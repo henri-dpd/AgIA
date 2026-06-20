@@ -6,7 +6,7 @@ from dev_agent_pipeline import (
     GeneratedArtifact,
     PipelineServices,
     PytestExecutionTool,
-    TesterAgent,
+    TesterAgent as PipelineTesterAgent,
     ValidationReport,
     build_graph,
     build_initial_state,
@@ -29,7 +29,7 @@ def test_tester_blocks_unsafe_code_before_pytest() -> None:
         test_code="from subject import dangerous\n\ndef test_placeholder() -> None:\n    dangerous()\n",
     )
 
-    report = TesterAgent().validate(artifact)
+    report = PipelineTesterAgent().validate(artifact)
 
     assert report.success is False
     assert report.blocked_reason is not None
