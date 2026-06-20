@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agia-multi-agent"
+version = "0.1.0"
+description = "Local multi-agent orchestration demo with LangGraph, LangChain and Ollama"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "langchain==1.3.10",
+  "langchain-ollama==1.1.0",
+  "langgraph==1.2.6",
+  "pydantic==2.13.4",
+]
+
+[project.scripts]
+agia-multi-agent = "app_multi_agent:main"
+
+[tool.setuptools]
+py-modules = ["app_multi_agent"]
