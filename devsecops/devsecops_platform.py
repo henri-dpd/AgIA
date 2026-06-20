@@ -282,8 +282,8 @@ def generate_iac_proposals(arch_plan: list[dict[str, Any]]) -> str:
             "content": (
                 "package kubernetes.admission\n\n"
                 "deny[msg] {\n"
-                "  input.request.object.spec.containers[_].securityContext.runAsRoot == true\n"
-                '  msg := "Containers must not run as root"\n'
+                "  input.request.object.spec.containers[_].securityContext.runAsUser == 0\n"
+                '  msg := "Containers must not run as root (runAsUser=0)"\n'
                 "}\n\n"
                 "deny[msg] {\n"
                 "  not input.request.object.spec.securityContext.runAsNonRoot\n"
@@ -401,7 +401,7 @@ def _scan_file(fp: Path, source: str, out: list[dict[str, Any]]) -> None:
         stripped = line.strip()
 
         if is_py:
-            if re.search(r"(?i)(password|token|secret)_?key\s*=\s*['\"]", line):
+            if re.search(r"(?i)(password|token|secret)_?key\b\s*=\s*['\"]", line):
                 out.append(_finding(fp, ln, "HARDCODED-SECRET", "high",
                     "A02:2021-Cryptographic Failures", stripped[:120],
                     "Hardcoded credential in source code."))
@@ -571,20 +571,23 @@ def _write_agent_output(agent_name: str, result: Any) -> dict[str, Any]:
 
 
 def _deterministic_result(agent_name: str, state: AgentState) -> Any:
-    dispatch = {
-        "threat_intel": lambda: json.loads(fetch_threat_intel.invoke({"context": state.get("context", "")})),
-        "architect": lambda: json.loads(plan_architecture.invoke({"threat_intel": state.get("threat_intel", []), "context": state.get("context", "")})),
-        "builder": lambda: json.loads(generate_iac_proposals.invoke({"arch_plan": state.get("arch_plan", [])})),
-        "deployment": lambda: json.loads(create_deployment_plan.invoke({"build_proposals": state.get("build_proposals", [])})),
-        "auditor": lambda: json.loads(run_audit.invoke({"target_dir": state.get("target_dir", ".")})) if not isinstance(json.loads(run_audit.invoke({"target_dir": state.get("target_dir", ".")})), dict) else [],
-        "remediator": lambda: json.loads(propose_remediations.invoke({"findings": state.get("audit_findings", [])})),
-    }
     try:
-        fn = dispatch.get(agent_name)
-        return fn() if fn else []
+        if agent_name == "threat_intel":
+            return json.loads(fetch_threat_intel.invoke({"context": state.get("context", "")}))
+        if agent_name == "architect":
+            return json.loads(plan_architecture.invoke({"threat_intel": state.get("threat_intel", []), "context": state.get("context", "")}))
+        if agent_name == "builder":
+            return json.loads(generate_iac_proposals.invoke({"arch_plan": state.get("arch_plan", [])}))
+        if agent_name == "deployment":
+            return json.loads(create_deployment_plan.invoke({"build_proposals": state.get("build_proposals", [])}))
+        if agent_name == "auditor":
+            result = json.loads(run_audit.invoke({"target_dir": state.get("target_dir", ".")}))
+            return result if isinstance(result, list) else []
+        if agent_name == "remediator":
+            return json.loads(propose_remediations.invoke({"findings": state.get("audit_findings", [])}))
     except Exception as exc:
         LOGGER.warning("Deterministic fallback for %s failed: %s", agent_name, exc)
-        return []
+    return []
 
 
 _TOOL_REGISTRY: dict[str, list] = {
