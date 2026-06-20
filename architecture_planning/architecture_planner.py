@@ -137,7 +137,7 @@ def _fallback_audit(proposal: str, round_number: int) -> QAAudit:
     has_topology = "topology" in lowered or "microservice" in lowered
     has_data = "sql" in lowered and "nosql" in lowered
     has_cache = "cache" in lowered or "redis" in lowered
-    has_consistency = "consisten" in lowered or "outbox" in lowered or "idempot" in lowered
+    has_consistency = "consisten" in lowered or "outbox" in lowered or "idempotent" in lowered
 
     approved = has_topology and has_data and has_cache and has_consistency
     if round_number >= MAX_REVIEW_ROUNDS:
