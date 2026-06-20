@@ -44,11 +44,11 @@ describe("normalizeScores", () => {
     expect(normalizeScores([0, 50, 100])).toEqual([0, 0.5, 1]);
   });
 
-  it("throws ValueError for an empty list", () => {
+  it("throws RangeError for an empty list", () => {
     expect(() => normalizeScores([])).toThrow(RangeError);
   });
 
-  it("throws ValueError when all values are equal", () => {
+  it("throws RangeError when all values are equal", () => {
     expect(() => normalizeScores([5, 5, 5])).toThrow(RangeError);
   });
 });

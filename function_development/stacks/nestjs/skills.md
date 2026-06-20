@@ -21,7 +21,17 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalFilters(new AllExceptionsFilter());
-  await DocumentBuilder and SwaggerModule setup...
+
+  const document = SwaggerModule.createDocument(
+    app,
+    new DocumentBuilder()
+      .setTitle("API")
+      .setVersion("1.0")
+      .addBearerAuth()
+      .build(),
+  );
+  SwaggerModule.setup("docs", app, document);
+
   await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
 }
 bootstrap();

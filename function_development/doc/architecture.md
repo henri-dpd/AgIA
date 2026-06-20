@@ -102,7 +102,7 @@ Activated when the Validator finds unmet acceptance criteria and `attempt < MAX_
 
 Activated when the Auditor sets `requires_plan_rework=True` and `planner_attempts < MAX_PLANNER_ROUNDS=2`. The Auditor's feedback is injected into the next Planner invocation.
 
-A hard `recursion_limit=25` is always supplied in the runtime config as a backstop against infinite loops.
+A hard `recursion_limit` equal to `RECURSION_LIMIT=25` is always supplied in the runtime config via `build_runtime_config` as a backstop against infinite loops.
 
 ## Key design choices
 
