@@ -3,10 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dev_agent_pipeline import (
+    AuditReport,
+    AuditorPort,
+    ContractReport,
+    ContractValidatorPort,
     FunctionRequest,
     GeneratedArtifact,
     PipelineServices,
+    PlanArtifact,
+    PlannerPort,
     PytestExecutionTool,
+    RECURSION_LIMIT,
     TesterAgent as PipelineTesterAgent,
     ValidationReport,
     build_graph,
@@ -57,6 +64,19 @@ def test_pytest_execution_tool_returns_traceback_feedback() -> None:
 
 
 @dataclass(frozen=True)
+class StubPlanner:
+    def plan(self, request: FunctionRequest, stack_context: str, audit_feedback: str | None) -> PlanArtifact:
+        return PlanArtifact(
+            title=f"Plan for {request.function_name}",
+            context_summary=request.specification[:200],
+            stack_guidelines_applied=[],
+            specifications=request.specification,
+            acceptance_criteria=["Function must be implemented as specified.", "All tests must pass."],
+            documentation=f"`{request.function_name}` implemented per specification.",
+        )
+
+
+@dataclass(frozen=True)
 class StubCoder:
     def generate(self, request: FunctionRequest, attempt: int, feedback: str | None):
         if attempt == 1:
@@ -80,8 +100,47 @@ class StubTester:
         return ValidationReport(success=False, exit_code=1, stdout="", stderr="", feedback="assert -1 == 5")
 
 
+@dataclass(frozen=True)
+class StubContractValidator:
+    def validate_contract(self, plan: PlanArtifact, artifact: GeneratedArtifact) -> ContractReport:
+        return ContractReport(
+            success=True,
+            checked_criteria=list(plan.acceptance_criteria),
+            failed_criteria=[],
+            feedback=None,
+        )
+
+
+@dataclass(frozen=True)
+class StubAuditor:
+    def audit(
+        self,
+        plan: PlanArtifact,
+        artifact: GeneratedArtifact,
+        contract: ContractReport,
+        attempt: int,
+    ) -> AuditReport:
+        return AuditReport(
+            approved=contract.success,
+            best_practices_violations=[],
+            scope_violations=[],
+            requires_user_action=False,
+            user_action_description=None,
+            requires_plan_rework=False,
+            feedback=None,
+        )
+
+
 def test_graph_retries_until_validation_passes() -> None:
-    graph = build_graph(PipelineServices(coder=StubCoder(), tester=StubTester()))
+    graph = build_graph(
+        PipelineServices(
+            planner=StubPlanner(),
+            coder=StubCoder(),
+            tester=StubTester(),
+            contract_validator=StubContractValidator(),
+            auditor=StubAuditor(),
+        )
+    )
     request = build_request("Implement def add(a: int, b: int) -> int that returns the sum.")
     config = build_runtime_config("test-thread")
 
@@ -95,5 +154,5 @@ def test_graph_retries_until_validation_passes() -> None:
 def test_runtime_config_uses_fixed_recursion_limit() -> None:
     config = build_runtime_config("thread-123")
 
-    assert config["recursion_limit"] == 8
+    assert config["recursion_limit"] == RECURSION_LIMIT
     assert config["configurable"]["thread_id"] == "thread-123"

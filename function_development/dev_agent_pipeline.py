@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Protocol, TypedDict
 
@@ -25,16 +25,19 @@ LOGGER = logging.getLogger("agia.function_development")
 DEFAULT_MODEL: Final[str] = os.getenv("OLLAMA_MODEL", "llama3.1")
 DEFAULT_BASE_URL: Final[str] = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 DEFAULT_THREAD_ID: Final[str] = "function-dev-001"
-RECURSION_LIMIT: Final[int] = 8
+RECURSION_LIMIT: Final[int] = 25
 MAX_CORRECTION_ROUNDS: Final[int] = 4
+MAX_PLANNER_ROUNDS: Final[int] = 2
 PYTEST_TIMEOUT_SECONDS: Final[int] = 30
 SPEC_MAX_LENGTH: Final[int] = 6_000
+STACKS_DIR: Final[Path] = Path(__file__).parent / "stacks"
 DEFAULT_SPEC: Final[str] = (
     "Implement `def normalize_scores(values: list[float]) -> list[float]` that returns values scaled into the "
     "[0.0, 1.0] range. Preserve the input order, reject an empty list with ValueError, and reject a list where "
     "all values are equal with ValueError."
 )
 CODE_BLOCK_RE: Final[re.Pattern[str]] = re.compile(r"```(?:python)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+JSON_BLOCK_RE: Final[re.Pattern[str]] = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 SIGNATURE_RE: Final[re.Pattern[str]] = re.compile(r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(")
 BLOCKED_IMPORTS: Final[frozenset[str]] = frozenset({"os", "subprocess", "socket", "httpx", "requests"})
 BLOCKED_CALLS: Final[frozenset[str]] = frozenset(
@@ -81,13 +84,55 @@ class ValidationReport(BaseModel):
     blocked_reason: str | None = None
 
 
+class PlanArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=200)
+    context_summary: str = Field(min_length=10, max_length=2000)
+    stack_guidelines_applied: list[str] = Field(default_factory=list)
+    specifications: str = Field(min_length=20, max_length=SPEC_MAX_LENGTH)
+    acceptance_criteria: list[str] = Field(min_length=1)
+    documentation: str = Field(min_length=10, max_length=3000)
+
+
+class ContractReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    success: bool
+    checked_criteria: list[str] = Field(default_factory=list)
+    failed_criteria: list[str] = Field(default_factory=list)
+    feedback: str | None = None
+
+
+class AuditReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    approved: bool
+    best_practices_violations: list[str] = Field(default_factory=list)
+    scope_violations: list[str] = Field(default_factory=list)
+    requires_user_action: bool = False
+    user_action_description: str | None = None
+    requires_plan_rework: bool = False
+    feedback: str | None = None
+
+
 class AgentState(TypedDict):
     request: dict[str, Any]
+    stack: str | None
     messages: Annotated[list[BaseMessage], add_messages]
     attempt: int
+    planner_attempts: int
+    plan_artifact: dict[str, Any] | None
     artifact: dict[str, Any] | None
     validation_report: dict[str, Any] | None
-    status: Literal["queued", "drafted", "retrying", "completed", "failed"]
+    contract_report: dict[str, Any] | None
+    audit_report: dict[str, Any] | None
+    status: Literal["queued", "planning", "drafted", "retrying", "validating", "auditing", "completed", "failed"]
+
+
+class PlannerPort(Protocol):
+    def plan(self, request: FunctionRequest, stack_context: str, audit_feedback: str | None) -> PlanArtifact:
+        ...
 
 
 class CoderPort(Protocol):
@@ -100,10 +145,29 @@ class TesterPort(Protocol):
         ...
 
 
+class ContractValidatorPort(Protocol):
+    def validate_contract(self, plan: PlanArtifact, artifact: GeneratedArtifact) -> ContractReport:
+        ...
+
+
+class AuditorPort(Protocol):
+    def audit(
+        self,
+        plan: PlanArtifact,
+        artifact: GeneratedArtifact,
+        contract: ContractReport,
+        attempt: int,
+    ) -> AuditReport:
+        ...
+
+
 @dataclass(frozen=True)
 class PipelineServices:
     coder: CoderPort
     tester: TesterPort
+    planner: PlannerPort = field(default_factory=lambda: PassthroughPlanner())
+    contract_validator: ContractValidatorPort = field(default_factory=lambda: PassthroughContractValidator())
+    auditor: AuditorPort = field(default_factory=lambda: PassthroughAuditor())
 
 
 class SecurityViolationError(ValueError):
@@ -225,6 +289,141 @@ class TesterAgent(TesterPort):
         return self._execution_tool.run(artifact)
 
 
+def load_stack_context(stack: str | None) -> str:
+    """Read best_practices, workflow, and skills files for the given stack."""
+    if not stack:
+        return ""
+    stack_dir = STACKS_DIR / stack.lower().replace(" ", "-")
+    if not stack_dir.is_dir():
+        LOGGER.warning("No stack guidelines found for: %s", stack)
+        return f"No guidelines found for stack: {stack}"
+    parts: list[str] = []
+    for file_name in ("best_practices.md", "workflow.md", "skills.md"):
+        file_path = stack_dir / file_name
+        if file_path.exists():
+            parts.append(f"### {file_name}\n{file_path.read_text(encoding='utf-8')}")
+    return "\n\n".join(parts)
+
+
+def _extract_json(text: str) -> dict[str, Any] | None:
+    """Extract the first JSON object from an LLM response."""
+    fence_match = JSON_BLOCK_RE.search(text)
+    candidate = fence_match.group(1) if fence_match else text
+    brace_match = re.search(r"\{.*\}", candidate, re.DOTALL)
+    if not brace_match:
+        return None
+    try:
+        return json.loads(brace_match.group())
+    except json.JSONDecodeError:
+        return None
+
+
+class PassthroughPlanner:
+    """Non-LLM planner that forwards the specification directly."""
+
+    def plan(self, request: FunctionRequest, stack_context: str, audit_feedback: str | None) -> PlanArtifact:
+        specs = request.specification
+        if audit_feedback:
+            specs = f"{specs}\n\nAudit feedback to address:\n{audit_feedback}"
+        applied = [stack_context[:60]] if stack_context else []
+        return PlanArtifact(
+            title=f"Plan for {request.function_name}",
+            context_summary=request.specification[:200],
+            stack_guidelines_applied=applied,
+            specifications=specs[:SPEC_MAX_LENGTH],
+            acceptance_criteria=["Function must be implemented as specified.", "All tests must pass."],
+            documentation=f"`{request.function_name}` implemented per specification.",
+        )
+
+
+class PassthroughContractValidator:
+    """Non-LLM contract validator that always approves."""
+
+    def validate_contract(self, plan: PlanArtifact, artifact: GeneratedArtifact) -> ContractReport:
+        return ContractReport(
+            success=True,
+            checked_criteria=list(plan.acceptance_criteria),
+            failed_criteria=[],
+            feedback=None,
+        )
+
+
+class PassthroughAuditor:
+    """Non-LLM auditor that approves when the contract passes."""
+
+    def audit(
+        self,
+        plan: PlanArtifact,
+        artifact: GeneratedArtifact,
+        contract: ContractReport,
+        attempt: int,
+    ) -> AuditReport:
+        return AuditReport(
+            approved=contract.success,
+            best_practices_violations=[],
+            scope_violations=[],
+            requires_user_action=False,
+            user_action_description=None,
+            requires_plan_rework=False,
+            feedback=None,
+        )
+
+
+class OllamaPlanner(PlannerPort):
+    def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL) -> None:
+        self._model = model
+        self._base_url = base_url
+
+    def plan(self, request: FunctionRequest, stack_context: str, audit_feedback: str | None) -> PlanArtifact:
+        LOGGER.info("Planner analysing specification for %s", request.function_name)
+        prompt = self._build_prompt(request, stack_context, audit_feedback)
+        raw = self._invoke(prompt)
+        return self._parse(raw, request, stack_context)
+
+    def _build_prompt(self, request: FunctionRequest, stack_context: str, audit_feedback: str | None) -> str:
+        prompt = (
+            "You are the Planner Agent in a software development pipeline. "
+            "Analyse the function specification, understand the context, "
+            "and produce a structured development plan with clear acceptance criteria.\n\n"
+            f"Function specification:\n{request.specification}\n\n"
+        )
+        if stack_context:
+            prompt += f"Stack guidelines to apply:\n{stack_context}\n\n"
+        if audit_feedback:
+            prompt += f"Auditor feedback requiring plan revision:\n{audit_feedback}\n\n"
+        prompt += (
+            "Respond with a single JSON object and nothing else:\n"
+            '{\n'
+            '  "title": "<short plan title>",\n'
+            '  "context_summary": "<what was understood from the request>",\n'
+            '  "stack_guidelines_applied": ["<guideline 1>", ...],\n'
+            '  "specifications": "<detailed spec for the developer>",\n'
+            '  "acceptance_criteria": ["<criterion 1>", ...],\n'
+            '  "documentation": "<doc string and usage notes>"\n'
+            '}'
+        )
+        return prompt
+
+    def _parse(self, raw: str, request: FunctionRequest, stack_context: str) -> PlanArtifact:
+        data = _extract_json(raw)
+        if data:
+            try:
+                return PlanArtifact.model_validate(data)
+            except (ValidationError, Exception):
+                pass
+        return PassthroughPlanner().plan(request, stack_context, None)
+
+    def _invoke(self, prompt: str) -> str:
+        llm = ChatOllama(model=self._model, base_url=self._base_url, temperature=0)
+        response = llm.invoke(
+            [
+                SystemMessage(content="You are a precise planning agent. Respond only with valid JSON."),
+                HumanMessage(content=prompt),
+            ]
+        )
+        return response.content if isinstance(response.content, str) else str(response.content)
+
+
 class OllamaCoder(CoderPort):
     def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL) -> None:
         self._model = model
@@ -258,7 +457,7 @@ class OllamaCoder(CoderPort):
             "- Do not use eval, exec, subprocess, or os.system.\n"
         )
         if feedback:
-            prompt += f"\nFix the implementation using this pytest feedback:\n{feedback}\n"
+            prompt += f"\nFix the implementation using this feedback:\n{feedback}\n"
         return self._invoke(prompt)
 
     def _generate_test_code(self, request: FunctionRequest, feedback: str | None) -> str:
@@ -276,7 +475,7 @@ class OllamaCoder(CoderPort):
             "- Do not use network, file-system, or subprocess operations.\n"
         )
         if feedback:
-            prompt += f"\nRevise the tests using this pytest feedback:\n{feedback}\n"
+            prompt += f"\nRevise the tests using this feedback:\n{feedback}\n"
         return self._invoke(prompt)
 
     def _invoke(self, prompt: str) -> str:
@@ -293,6 +492,124 @@ class OllamaCoder(CoderPort):
             ]
         )
         return strip_code_fences(response.content)
+
+
+class OllamaContractValidator(ContractValidatorPort):
+    def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL) -> None:
+        self._model = model
+        self._base_url = base_url
+
+    def validate_contract(self, plan: PlanArtifact, artifact: GeneratedArtifact) -> ContractReport:
+        LOGGER.info("Contract validator checking %s against plan", artifact.function_name)
+        criteria_str = "\n".join(f"- {c}" for c in plan.acceptance_criteria)
+        prompt = (
+            "You are the Contract Validator Agent. "
+            "Compare the generated function code against the acceptance criteria.\n\n"
+            f"Acceptance criteria:\n{criteria_str}\n\n"
+            f"Generated function code:\n```python\n{artifact.function_code}\n```\n\n"
+            "Respond with a single JSON object and nothing else:\n"
+            '{\n'
+            '  "success": true,\n'
+            '  "checked_criteria": ["<criterion 1>", ...],\n'
+            '  "failed_criteria": [],\n'
+            '  "feedback": null\n'
+            '}\n'
+            "Set success=false and list failed_criteria when any criterion is unmet. "
+            "Set feedback to a corrective summary when success is false."
+        )
+        raw = self._invoke(prompt)
+        return self._parse(raw, plan)
+
+    def _parse(self, raw: str, plan: PlanArtifact) -> ContractReport:
+        data = _extract_json(raw)
+        if data:
+            try:
+                return ContractReport.model_validate(data)
+            except (ValidationError, Exception):
+                pass
+        return PassthroughContractValidator().validate_contract(plan, GeneratedArtifact(
+            function_name="unknown", function_code="pass  # fallback", test_code="pass  # fallback"
+        ))
+
+    def _invoke(self, prompt: str) -> str:
+        llm = ChatOllama(model=self._model, base_url=self._base_url, temperature=0)
+        response = llm.invoke(
+            [
+                SystemMessage(content="You are a precise validation agent. Respond only with valid JSON."),
+                HumanMessage(content=prompt),
+            ]
+        )
+        return response.content if isinstance(response.content, str) else str(response.content)
+
+
+class OllamaAuditor(AuditorPort):
+    def __init__(self, model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL) -> None:
+        self._model = model
+        self._base_url = base_url
+
+    def audit(
+        self,
+        plan: PlanArtifact,
+        artifact: GeneratedArtifact,
+        contract: ContractReport,
+        attempt: int,
+    ) -> AuditReport:
+        LOGGER.info("Auditor reviewing attempt %s for %s", attempt, artifact.function_name)
+        failed_str = ", ".join(contract.failed_criteria) or "none"
+        prompt = (
+            "You are the Auditor Agent, acting as a quality manager for the development pipeline. "
+            "Review the plan, generated code, and contract validation result.\n\n"
+            f"Plan: {plan.title}\n"
+            f"Specifications (excerpt): {plan.specifications[:400]}\n\n"
+            f"Contract validation success: {contract.success}\n"
+            f"Failed criteria: {failed_str}\n\n"
+            f"Generated code (excerpt):\n```python\n{artifact.function_code[:800]}\n```\n\n"
+            f"Correction attempt: {attempt}\n\n"
+            "Check for best-practice violations and scope creep. "
+            "Only request a plan rework when the specification itself is fundamentally wrong. "
+            "Respond with a single JSON object and nothing else:\n"
+            '{\n'
+            '  "approved": true,\n'
+            '  "best_practices_violations": [],\n'
+            '  "scope_violations": [],\n'
+            '  "requires_user_action": false,\n'
+            '  "user_action_description": null,\n'
+            '  "requires_plan_rework": false,\n'
+            '  "feedback": null\n'
+            '}'
+        )
+        raw = self._invoke(prompt)
+        return self._parse(raw, contract)
+
+    def _parse(self, raw: str, contract: ContractReport) -> AuditReport:
+        data = _extract_json(raw)
+        if data:
+            try:
+                return AuditReport.model_validate(data)
+            except (ValidationError, Exception):
+                pass
+        return PassthroughAuditor().audit(
+            PlanArtifact(
+                title="fallback",
+                context_summary="fallback",
+                specifications="pass  # fallback",
+                acceptance_criteria=["pass"],
+                documentation="fallback",
+            ),
+            GeneratedArtifact(function_name="unknown", function_code="pass  # fallback", test_code="pass  # fallback"),
+            contract,
+            0,
+        )
+
+    def _invoke(self, prompt: str) -> str:
+        llm = ChatOllama(model=self._model, base_url=self._base_url, temperature=0)
+        response = llm.invoke(
+            [
+                SystemMessage(content="You are a precise audit agent. Respond only with valid JSON."),
+                HumanMessage(content=prompt),
+            ]
+        )
+        return response.content if isinstance(response.content, str) else str(response.content)
 
 
 class CompiledGraph(Protocol):
@@ -336,28 +653,77 @@ def format_feedback(report: ValidationReport) -> str | None:
 
 
 def build_services(model: str = DEFAULT_MODEL, base_url: str = DEFAULT_BASE_URL) -> PipelineServices:
-    return PipelineServices(coder=OllamaCoder(model=model, base_url=base_url), tester=TesterAgent())
+    return PipelineServices(
+        planner=OllamaPlanner(model=model, base_url=base_url),
+        coder=OllamaCoder(model=model, base_url=base_url),
+        tester=TesterAgent(),
+        contract_validator=OllamaContractValidator(model=model, base_url=base_url),
+        auditor=OllamaAuditor(model=model, base_url=base_url),
+    )
+
+
+def planner_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
+    request = FunctionRequest.model_validate(state["request"])
+    stack_context = load_stack_context(state.get("stack"))
+    audit_feedback: str | None = None
+    if state.get("audit_report"):
+        audit = AuditReport.model_validate(state["audit_report"])
+        audit_feedback = audit.feedback
+    next_planner_attempts = state.get("planner_attempts", 0) + 1
+    plan = services.planner.plan(request=request, stack_context=stack_context, audit_feedback=audit_feedback)
+    LOGGER.info("Planner round %s produced plan: %s", next_planner_attempts, plan.title)
+    return {
+        "planner_attempts": next_planner_attempts,
+        "plan_artifact": plan.model_dump(),
+        "status": "planning",
+        "messages": [AIMessage(content=f"Planner produced plan: {plan.title}")],
+    }
 
 
 def coder_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
     request = FunctionRequest.model_validate(state["request"])
+    plan = PlanArtifact.model_validate(state["plan_artifact"]) if state.get("plan_artifact") else None
+
+    if plan:
+        criteria_str = "\n".join(f"- {c}" for c in plan.acceptance_criteria)
+        enriched = f"{plan.specifications}\n\nAcceptance criteria:\n{criteria_str}"
+        effective_request = FunctionRequest(
+            specification=enriched[:SPEC_MAX_LENGTH],
+            function_name=request.function_name,
+        )
+    else:
+        effective_request = request
+
     previous_report = (
         ValidationReport.model_validate(state["validation_report"])
         if state.get("validation_report")
         else None
     )
+    previous_contract = (
+        ContractReport.model_validate(state["contract_report"])
+        if state.get("contract_report")
+        else None
+    )
+
     next_attempt = state["attempt"] + 1
-    feedback = format_feedback(previous_report) if previous_report else None
-    artifact = services.coder.generate(request=request, attempt=next_attempt, feedback=feedback)
+
+    feedback_parts: list[str] = []
+    if previous_report:
+        fb = format_feedback(previous_report)
+        if fb:
+            feedback_parts.append(f"Test feedback:\n{fb}")
+    if previous_contract and not previous_contract.success and previous_contract.feedback:
+        feedback_parts.append(f"Specification compliance feedback:\n{previous_contract.feedback}")
+    feedback = "\n\n".join(feedback_parts) or None
+
+    artifact = services.coder.generate(request=effective_request, attempt=next_attempt, feedback=feedback)
     return {
         "attempt": next_attempt,
         "artifact": artifact.model_dump(),
         "status": "drafted",
         "messages": [
             AIMessage(
-                content=(
-                    f"Coder round {next_attempt} produced implementation and tests for {artifact.function_name}."
-                )
+                content=f"Coder round {next_attempt} produced implementation and tests for {artifact.function_name}."
             )
         ],
     }
@@ -366,11 +732,17 @@ def coder_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
 def tester_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
     artifact = GeneratedArtifact.model_validate(state["artifact"])
     report = services.tester.validate(artifact)
-    status = "completed" if report.success else "retrying"
-    if report.blocked_reason or state["attempt"] >= MAX_CORRECTION_ROUNDS:
-        status = "failed"
 
-    message = "Validation passed." if report.success else (report.feedback or "Validation failed.")
+    if report.blocked_reason:
+        status: Literal["queued", "planning", "drafted", "retrying", "validating", "auditing", "completed", "failed"] = "failed"
+    elif report.success:
+        status = "drafted"
+    elif state["attempt"] >= MAX_CORRECTION_ROUNDS:
+        status = "failed"
+    else:
+        status = "retrying"
+
+    message = "Tests passed." if report.success else (report.feedback or "Tests failed.")
     LOGGER.info("Tester round %s success=%s", state["attempt"], report.success)
     return {
         "validation_report": report.model_dump(),
@@ -379,31 +751,104 @@ def tester_node(state: AgentState, services: PipelineServices) -> dict[str, Any]
     }
 
 
-def route_after_testing(state: AgentState) -> Literal["coder", "end"]:
+def validator_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
+    artifact = GeneratedArtifact.model_validate(state["artifact"])
+    plan = PlanArtifact.model_validate(state["plan_artifact"]) if state.get("plan_artifact") else None
+
+    if plan is None:
+        report = ContractReport(success=True, checked_criteria=[], failed_criteria=[], feedback=None)
+    else:
+        report = services.contract_validator.validate_contract(plan=plan, artifact=artifact)
+
+    message = "Contract validation passed." if report.success else (report.feedback or "Contract validation failed.")
+    LOGGER.info("Contract validator success=%s for %s", report.success, artifact.function_name)
+    return {
+        "contract_report": report.model_dump(),
+        "status": "validating",
+        "messages": [AIMessage(content=message)],
+    }
+
+
+def auditor_node(state: AgentState, services: PipelineServices) -> dict[str, Any]:
+    artifact = GeneratedArtifact.model_validate(state["artifact"])
+    plan = PlanArtifact.model_validate(state["plan_artifact"]) if state.get("plan_artifact") else None
+    contract = ContractReport.model_validate(state["contract_report"]) if state.get("contract_report") else None
+
+    if plan is None or contract is None:
+        audit = AuditReport(approved=True)
+    else:
+        audit = services.auditor.audit(plan=plan, artifact=artifact, contract=contract, attempt=state["attempt"])
+
+    if audit.approved:
+        status: Literal["queued", "planning", "drafted", "retrying", "validating", "auditing", "completed", "failed"] = "completed"
+    elif audit.requires_plan_rework:
+        status = "retrying"
+    else:
+        status = "failed"
+
+    message = "Audit approved." if audit.approved else (audit.feedback or "Audit failed.")
+    LOGGER.info("Auditor approved=%s for %s", audit.approved, artifact.function_name)
+    return {
+        "audit_report": audit.model_dump(),
+        "status": status,
+        "messages": [AIMessage(content=message)],
+    }
+
+
+def route_after_testing(state: AgentState) -> Literal["validator", "coder", "end"]:
     report = ValidationReport.model_validate(state["validation_report"])
-    if report.success:
-        return "end"
-    if state["attempt"] >= MAX_CORRECTION_ROUNDS:
-        return "end"
     if report.blocked_reason:
         return "end"
+    if report.success:
+        return "validator"
+    if state["attempt"] >= MAX_CORRECTION_ROUNDS:
+        return "end"
     return "coder"
+
+
+def route_after_validation(state: AgentState) -> Literal["auditor", "coder", "end"]:
+    contract = ContractReport.model_validate(state["contract_report"])
+    if contract.success:
+        return "auditor"
+    if state["attempt"] >= MAX_CORRECTION_ROUNDS:
+        return "end"
+    return "coder"
+
+
+def route_after_audit(state: AgentState) -> Literal["planner", "end"]:
+    audit = AuditReport.model_validate(state["audit_report"])
+    if audit.approved:
+        return "end"
+    if audit.requires_plan_rework and state.get("planner_attempts", 0) < MAX_PLANNER_ROUNDS:
+        return "planner"
+    return "end"
 
 
 def build_graph(services: PipelineServices | None = None) -> CompiledGraph:
     runtime_services = services or build_services()
     workflow = StateGraph(AgentState)
+    workflow.add_node("planner", lambda state: planner_node(state, runtime_services))
     workflow.add_node("coder", lambda state: coder_node(state, runtime_services))
     workflow.add_node("tester", lambda state: tester_node(state, runtime_services))
-    workflow.add_edge(START, "coder")
+    workflow.add_node("validator", lambda state: validator_node(state, runtime_services))
+    workflow.add_node("auditor", lambda state: auditor_node(state, runtime_services))
+    workflow.add_edge(START, "planner")
+    workflow.add_edge("planner", "coder")
     workflow.add_edge("coder", "tester")
     workflow.add_conditional_edges(
         "tester",
         route_after_testing,
-        {
-            "coder": "coder",
-            "end": END,
-        },
+        {"validator": "validator", "coder": "coder", "end": END},
+    )
+    workflow.add_conditional_edges(
+        "validator",
+        route_after_validation,
+        {"auditor": "auditor", "coder": "coder", "end": END},
+    )
+    workflow.add_conditional_edges(
+        "auditor",
+        route_after_audit,
+        {"planner": "planner", "end": END},
     )
     return workflow.compile(checkpointer=MemorySaver(), debug=False, name="function_development")
 
@@ -412,13 +857,18 @@ def build_runtime_config(thread_id: str) -> dict[str, Any]:
     return {"configurable": {"thread_id": thread_id}, "recursion_limit": RECURSION_LIMIT}
 
 
-def build_initial_state(request: FunctionRequest) -> AgentState:
+def build_initial_state(request: FunctionRequest, stack: str | None = None) -> AgentState:
     return {
         "request": request.model_dump(),
+        "stack": stack,
         "messages": [HumanMessage(content=request.specification)],
         "attempt": 0,
+        "planner_attempts": 0,
+        "plan_artifact": None,
         "artifact": None,
         "validation_report": None,
+        "contract_report": None,
+        "audit_report": None,
         "status": "queued",
     }
 
@@ -431,19 +881,30 @@ def print_summary(final_state: dict[str, Any], graph: CompiledGraph, config: dic
     print("\nLatest checkpoint")
     print(f"next={checkpoint.next}")
     print(f"status={checkpoint.values.get('status')}")
+    if checkpoint.values.get("plan_artifact"):
+        plan = checkpoint.values["plan_artifact"]
+        print(f"plan={plan.get('title', '')}")
+    if checkpoint.values.get("audit_report"):
+        audit = checkpoint.values["audit_report"]
+        print(f"audit_approved={audit.get('approved')}")
 
     if not show_history:
         return
 
     print("\nCheckpoint history")
     for snapshot in graph.get_state_history(config):
-        print(f"- next={snapshot.next} status={snapshot.values.get('status')} attempt={snapshot.values.get('attempt')}")
+        print(
+            f"- next={snapshot.next} status={snapshot.values.get('status')} "
+            f"attempt={snapshot.values.get('attempt')} "
+            f"planner_attempts={snapshot.values.get('planner_attempts')}"
+        )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the autonomous function development pack.")
     parser.add_argument("--spec", default=DEFAULT_SPEC, help="Function specification provided to the coder agent.")
     parser.add_argument("--spec-file", help="Optional path to a UTF-8 text file containing the function specification.")
+    parser.add_argument("--stack", default=None, help="Technology stack for context (e.g. python, typescript, aws).")
     parser.add_argument("--thread-id", default=DEFAULT_THREAD_ID, help="LangGraph MemorySaver thread identifier.")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model name.")
     parser.add_argument("--ollama-host", default=DEFAULT_BASE_URL, help="Ollama API base URL.")
@@ -475,7 +936,7 @@ def main() -> int:
     config = build_runtime_config(args.thread_id)
 
     try:
-        final_state = graph.invoke(build_initial_state(request), config=config)
+        final_state = graph.invoke(build_initial_state(request, stack=args.stack), config=config)
     except Exception as exc:  # pragma: no cover - runtime integration safeguard
         LOGGER.exception("Pipeline execution failed: %s", exc)
         return 1
