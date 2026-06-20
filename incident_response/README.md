@@ -4,6 +4,8 @@ AI agents for local multi-agent orchestration with LangGraph, LangChain, and Oll
 
 All commands in this file assume your working directory is `incident_response/`.
 
+For workspace structure and new pack creation rules, start at [../README.md](../README.md) and [../doc/new-pack.md](../doc/new-pack.md).
+
 ## Quick start
 
 ```bash

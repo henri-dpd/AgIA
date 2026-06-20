@@ -59,6 +59,10 @@ with patch("app_multi_agent.ChatOllama") as mock_llm:
 ## Running validation
 
 ```bash
+# Repository-wide pack validation
+python scripts/validate_packs.py
+python scripts/validate_packs.py --check-docker
+
 # Exploratory CLI run
 python app_multi_agent.py --show-history
 

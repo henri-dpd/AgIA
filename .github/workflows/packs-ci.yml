@@ -1,0 +1,24 @@
+name: Packs CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-packs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate pack structure and Python sources
+        run: python scripts/validate_packs.py
+
+      - name: Validate Docker Compose definitions
+        run: python scripts/validate_packs.py --check-docker

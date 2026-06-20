@@ -10,12 +10,15 @@ This workspace is organised as a collection of multi-agent packs. Each pack owns
 
 Every change starts with exploration of the target pack, then moves to documentation, implementation, and focused validation. Automated tests are optional in packs that are still exploratory; validation must still be reproducible.
 
+When the task is to create a new multi-agent pack, read the workspace root `README.md`, `doc/repository.md`, `doc/new-pack.md`, and `agents.md` before scaffolding files.
+
 ---
 
 ## Step 1 — Explore first
 
 Before changing code, inspect the target pack and confirm the real execution surface.
 
+- If the task creates a new pack, inspect the root repository docs first.
 - Read the pack `README.md`, local `doc/` files, and the runtime entrypoint.
 - Identify the narrowest owning file before editing.
 - Prefer scenario exploration, CLI runs, or Docker runs over speculative changes.
@@ -73,6 +76,8 @@ Validation is complete when:
 2. The implementation matches every documented behaviour.
 3. The chosen validation path is reproducible by another contributor.
 4. No security constraint listed in the target pack `doc/security.md` is violated.
+
+At the repository level, run `python scripts/validate_packs.py` and, when Docker is available, `python scripts/validate_packs.py --check-docker`.
 
 ---
 

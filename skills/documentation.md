@@ -6,6 +6,9 @@ These rules govern how documentation is written and maintained in this repositor
 
 | Content | File |
 |---|---|
+| Workspace overview and onboarding | `README.md` |
+| Repository purpose and structure | `doc/repository.md` |
+| New pack creation guide | `doc/new-pack.md` |
 | Workspace agent catalog | `agents.md` |
 | Incident response overview, quick start | `incident_response/README.md` |
 | Incident response system design, data flow, state | `incident_response/doc/architecture.md` |
@@ -16,7 +19,7 @@ These rules govern how documentation is written and maintained in this repositor
 | Testing rules | `skills/testing.md` |
 | Documentation rules | `skills/documentation.md` (this file) |
 
-Each multi-agent pack should keep its operational content inside its own folder. Do not duplicate pack-specific operational details in the workspace root.
+Each multi-agent pack should keep its operational content inside its own folder. Use the workspace root only for repository-level guidance and pack discovery. Do not duplicate pack-specific operational details in the workspace root.
 
 ## Language
 
